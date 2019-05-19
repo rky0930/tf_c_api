@@ -1,8 +1,7 @@
-## Tensorflow C API
-### Object detection
-
-
-### Requirement
+## Tensorflow C API - Object Detection
+ - Only Inference not for training
+ 
+### Library requirements
 - [Tensorflow C API](https://www.tensorflow.org/install/lang_c)
   - Version 1.13.1
 - OpenCV
@@ -21,6 +20,8 @@ docker pull rky0930/tf_c_api:cuda-10-cudnn7-opencv
 cd object_detection
 make
 ```
+### Model 
+Use model of [Object detection API](https://github.com/tensorflow/models/tree/master/research/object_detection)
 
 ### Run
 ```
@@ -32,6 +33,6 @@ Usage : ./object_detection --(f)rozen_graph_path --(i)mage_path [--(c)onfidence_
 ```
 
 ### Reference
-https://www.tensorflow.org/install/lang_c
+https://www.tensorflow.org/install/lang_c  
 https://github.com/Neargye/hello_tf_c_api  
 https://github.com/PatWie/tensorflow-cmake  
