@@ -26,9 +26,9 @@ Use model of [Object detection API](https://github.com/tensorflow/models/tree/ma
 ### Run
 ```
 Usage : ./object_detection --(f)rozen_graph_path --(i)mage_path [--(c)onfidence_score_threshold] [--(m)ax_detections] [--(v)erbose] [--(s)how]
-# ex_1) setting frozen graph / image dir 
+# ex_1) frozen graph / image dir 
 ./object_detection -f ckpt/faster_rcnn_resnet50_coco_2018_01_28/frozen_inference_graph.pb -i image_dir
-# ex_2) setting frozen graph / image dir / verbose mode / Show object detection result image
+# ex_2) frozen graph / image dir / verbose mode / Show object detection result image
 ./object_detection -f ckpt/faster_rcnn_resnet50_coco_2018_01_28/frozen_inference_graph.pb -i image_dir -v -s
 ```
 
