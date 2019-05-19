@@ -31,7 +31,7 @@ LDFLAGS=
 LDLIBS=-ltensorflow $(shell pkg-config --cflags --libs opencv)
 TARGET=object_detection
 
-SRCS=object_detection.cpp
+SRCS=object_detection.cpp main.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
 
 all: object_detection

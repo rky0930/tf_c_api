@@ -1,188 +1,200 @@
-#include "tensorflow/c/c_api.h"
-#include <opencv2/opencv.hpp>
+#include "object_detection.hpp"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <string.h>
-#include <assert.h>
-#include <vector>
-#include <algorithm>
-#include <iterator>
-#include <iostream>
-
-using namespace std;
-
-TF_Buffer* read_file(const char* file);
 void free_buffer(void* data, size_t length) { free(data); }
-static void Deallocator(void* data, size_t length, void* arg) { free(data); }
+
 TF_Tensor* CreateTensor(TF_DataType data_type,
                         const std::int64_t* dims, std::size_t num_dims,
-                        const void* data, std::size_t len);
-
-int main(int argc, char* argv[]) {
-  // Use read_file to get graph_def as TF_Buffer*
-  // TF_Buffer* graph_def = read_file("/home/yoon/workspace/repos/rky0930/MyTensorflowBenchmark/models/object_detection/tensorflow/ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.pb");
-  // TF_Buffer* graph_def = read_file("/home/yoon/workspace/tf_c_api/ckpt/ssdlite_mobilenet_v2_1_400_225_coco_toastcam_v5/frozen_inference_graph.pb");
-  TF_Buffer* graph_def = read_file("/home/yoon/workspace/tf_c_api/ckpt/faster_rcnn_resnet50_coco_2018_01_28/frozen_inference_graph.pb");
-  // TF_Buffer* graph_def = read_file("/home/yoon/workspace/tf_c_api/examples/tensorflow-object-detection-cpp/demo/ssd_mobilenet_v1_egohands/frozen_inference_graph.pb");
-
-  // Import graph_def into graph
-  TF_Graph* graph = TF_NewGraph();
-  TF_Status* status = TF_NewStatus();
-  TF_ImportGraphDefOptions* graph_opts = TF_NewImportGraphDefOptions();
-  TF_GraphImportGraphDef(graph, graph_def, graph_opts, status);
-  if (TF_GetCode(status) != TF_OK) {
-    fprintf(stderr, "ERROR: Unable to import graph %s", TF_Message(status));
-    return 1;
+                        const void* data, std::size_t len) {
+  if (dims == nullptr || data == nullptr) {
+    return nullptr;
   }
-  else {
-    fprintf(stdout, "Successfully imported graph\n");
+  TF_Tensor* tensor = TF_AllocateTensor(data_type, dims, static_cast<int>(num_dims), len);
+  if (tensor == nullptr) {
+    return nullptr;
   }
-    
-  // Input Image
-  cout<<"Load image:"<<argv[1]<<endl;
-  IplImage* img = cvLoadImage(argv[1], CV_LOAD_IMAGE_COLOR);
-  cvCvtColor(img, img, CV_BGR2RGB);
-  // cvNormalize(img, img, 10, 0);
-  if (!img)
-  {
-    printf("Image can NOT Load!!!\n");
-    return 1;
+  void* tensor_data = TF_TensorData(tensor);
+  if (tensor_data == nullptr) {
+    TF_DeleteTensor(tensor);
+    return nullptr;
   }
-  printf("First pixel: (");
-  for (int i=0; i<3; i++) {
-    printf("%u ", (uint8_t)img->imageData[i]);
-  }
-  printf(") \n");
-  cout<<"Image size: "<<img->width<<", "<<img->height<<", "<<img->nChannels<<endl;
-  cout<<"img->depth: "<<img->depth<<endl;
-  cout<<"img->imageSize: "<<img->imageSize<<endl;
-  cout<<"img->alphaChannel: "<<img->alphaChannel<<endl;
-  cout<<"img->channelSeq : "<<img->channelSeq <<endl;
-  cout<<"img->colorModel: "<<img->colorModel<<endl;
-  cout<<"img->dataOrder: "<<img->dataOrder<<endl;
-  cout<<"img->nSize: "<<img->nSize<<endl;
-  cout<<"img->widthStep: "<<img->widthStep<<endl;
-  int img_width = img->width;
-  int img_height = img->height;
-  int img_channel = img->nChannels;
-  // ######################
-  // Set up graph inputs
-  // ######################
-
-  // Pass the graph and a string name of your input operation
-  // (make sure the operation name is correct)
-  TF_Operation* input_op = TF_GraphOperationByName(graph, "image_tensor");
-  TF_Output input_opout = {input_op, 0};
-  TF_Output inputs[1] = {input_opout};
-  // variables created earlier
-  // const std::vector<std::int64_t> input_dims = {1, img_width, img_height, img_channel};
-  const std::vector<std::int64_t> input_dims = {1, img_height, img_width, img_channel};
-  cout<<img->imageSize<<endl;
-  // TF_Tensor* input_value = TF_NewTensor(TF_UINT8, in_dims, 4, img->imageData, img->imageSize, &Deallocator, 0);
-  TF_Tensor* input_value = CreateTensor(TF_UINT8,
-                                        input_dims.data(), input_dims.size(),
-                                        img->imageData, img->imageSize);
-  TF_Tensor* input_values[1] = {input_value};
-  // Optionally, you can check that your input_op and input tensors are correct
-  // by using some of the functions provided by the C API.
-  cout << "Input op info: " << TF_OperationNumInputs(input_op) << "\n";
-  cout << "Input data info: " << TF_Dim(input_value, 1) << "\n";
-
-  // ######################
-  // Set up graph outputs (similar to setting up graph inputs)
-  // ######################
-
-  // Create vector to store graph output operations
-  TF_Operation* boxes = TF_GraphOperationByName(graph, "detection_boxes");
-  TF_Operation* scores = TF_GraphOperationByName(graph, "detection_scores");
-  TF_Operation* classes = TF_GraphOperationByName(graph, "detection_classes");
-  TF_Operation* num_detections = TF_GraphOperationByName(graph, "num_detections");
-  TF_Output boxes_opout = {boxes, 0};
-  TF_Output scores_opout = {scores, 0};
-  TF_Output classes_opout = {classes, 0};
-  TF_Output num_detections_opout = {num_detections, 0};
-  TF_Output outputs[4] = {boxes_opout, scores_opout, classes_opout, num_detections_opout};
-
-  // Similar to creating the input tensor, however here we don't yet have the
-  // output values, so we use TF_AllocateTensor()
-    // Create variables to store the size of the input and output variables
-  int max_detections = 100;
-  int64_t box_dims[] = {1, 100, 4};
-  int64_t scores_dims[] = {1, 100};
-  int64_t classes_dims[] = {1, 100};
-  int64_t num_detections_dims[] = {1, 1};
-  TF_Tensor* boxes_value = TF_AllocateTensor(TF_FLOAT, box_dims, 3, sizeof(float) * 4 * max_detections);
-  TF_Tensor* scores_value = TF_AllocateTensor(TF_FLOAT, scores_dims, 2, sizeof(float) * max_detections);
-  TF_Tensor* classes_value = TF_AllocateTensor(TF_FLOAT, classes_dims, 2, sizeof(float) * max_detections);
-  TF_Tensor* num_detections_value = TF_AllocateTensor(TF_FLOAT, num_detections_dims, 2, sizeof(float));
-  TF_Tensor* output_values[4] = {boxes_value, scores_value, classes_value, num_detections_value};
-  
-  // As with inputs, check the values for the output operation and output tensor
-  cout << "Output: " << TF_OperationName(boxes) << "\n";
-  cout << "Output: " << TF_OperationName(scores) << "\n";
-  cout << "Output: " << TF_OperationName(classes) << "\n";
-  cout << "Output: " << TF_OperationName(num_detections) << "\n";
-
-  // ######################
-  // Run graph
-  // ######################
-  fprintf(stdout, "Running session...\n");
-  TF_SessionOptions* sess_opts = TF_NewSessionOptions();
-  TF_Session* session = TF_NewSession(graph, sess_opts, status);
-  assert(TF_GetCode(status) == TF_OK);
-
-  // Call TF_SessionRun
-  TF_SessionRun(session, nullptr,
-                inputs, input_values, 1,
-                outputs, output_values, 4,
-                nullptr, 0, nullptr, status);
-
-  cout<<"Print output: "<<endl;
-  if(TF_GetCode(status) != TF_OK) {
-    printf("It's coming here\n");
-    printf("%s\n", TF_Message(status));
-  }
-  else {
-    printf("Ran successfully\n");
-    float* f = (float*)TF_TensorData(output_values[1]);
-    float* b = (float*)TF_TensorData(output_values[0]);
-    float* c = (float*)TF_TensorData(output_values[2]);
-    float* n = (float*)TF_TensorData(output_values[3]);
-    int num_detections = (int)n[0];
-    // cout << "Output: " << TF_OperationName(outputs[0].oper) << "\n";
-    // cout << "Output: " << TF_OperationName(outputs[1].oper) << "\n";
-    // cout << "Output: " << TF_OperationName(outputs[2].oper) << "\n";
-    // cout << "Output: " << TF_OperationName(outputs[3].oper) << "\n";
-    printf("num_detections: %d\n", num_detections);
-    for (int i=0; i<num_detections; i++) {
-      if (f[i] >= 0.5) {
-        printf("1 TF data %f\n", f[i]);
-        int xmin = (int)(b[i*4+1] * img_width);
-        int ymin = (int)(b[i*4+0] * img_height);
-        int xmax = (int)(b[i*4+3] * img_width);
-        int ymax = (int)(b[i*4+2] * img_height);
-        cvRectangle(img, cvPoint(xmin, ymin), cvPoint(xmax, ymax), CV_RGB(0, 255, 255));
-        cvShowImage("Drawing Graphics", img);
-        cvWaitKey(0);
-        // break;
-      }
-    }
-    fprintf(stdout, "Successfully run session\n");
-  }
-
-  // Delete variables
-  TF_CloseSession(session, status);
-  TF_DeleteSession(session, status);
-  TF_DeleteSessionOptions(sess_opts);
-  TF_DeleteImportGraphDefOptions(graph_opts);
-  TF_DeleteGraph(graph);
-  TF_DeleteStatus(status);
-  return 0;
+  memcpy(tensor_data, data, std::min(len, TF_TensorByteSize(tensor)));
+  return tensor;
 }
 
-TF_Buffer* read_file(const char* file) {
+ObjectDetection::ObjectDetection(std::string frozen_graph_path, float confidence_score_threshold, 
+                                 int max_detections) {
+  this->frozen_graph_path = frozen_graph_path;
+  this->confidence_score_threshold = confidence_score_threshold;
+  this->max_detections = max_detections;
+}
+
+void ObjectDetection::init() {
+  this->set_graph();
+}
+
+void ObjectDetection::set_graph() {
+  std::cout<<"Load Model: "<<this->frozen_graph_path<<std::endl;
+  this->graph_def = this->read_file(this->frozen_graph_path);
+  this->graph = TF_NewGraph();
+  this->graph_status = TF_NewStatus();
+  this->graph_opts = TF_NewImportGraphDefOptions();
+  TF_GraphImportGraphDef(this->graph, this->graph_def, 
+                         this->graph_opts, this->graph_status);
+  if (TF_GetCode(this->graph_status) != TF_OK) {
+    fprintf(stderr, "ERROR: Unable to import graph %s", TF_Message(this->graph_status));
+    exit(1);
+  } else {
+    fprintf(stdout, "Successfully imported graph\n");
+  }
+
+  // Create Session 
+  this->sess_opts = TF_NewSessionOptions();
+  this->sess_status = TF_NewStatus();
+  this->sess = TF_NewSession(this->graph, this->sess_opts, this->sess_status);
+  if(TF_GetCode(this->sess_status) != TF_OK) {
+    fprintf(stderr, "ERROR: Unable to create session %s", TF_Message(this->sess_status));
+  }
+  // Set up input op
+  this->input_op = TF_GraphOperationByName(graph, "image_tensor");
+  this->input_opout = {input_op, 0};
+  this->input_ops.push_back(input_opout);
+  // Set up output ops
+  this->boxes_op = TF_GraphOperationByName(graph, "detection_boxes");
+  this->scores_op = TF_GraphOperationByName(graph, "detection_scores");
+  this->classes_op = TF_GraphOperationByName(graph, "detection_classes");
+  this->num_detections_op = TF_GraphOperationByName(graph, "num_detections");
+  this->boxes_opout = {boxes_op, 0};
+  this->scores_opout = {scores_op, 0};
+  this->classes_opout = {classes_op, 0};
+  this->num_detections_opout = {num_detections_op, 0};
+  this->output_ops.push_back(boxes_opout);
+  this->output_ops.push_back(scores_opout);
+  this->output_ops.push_back(classes_opout);
+  this->output_ops.push_back(num_detections_opout);
+  if (this->verbose) {
+    std::cout << "Input Op Name: " << TF_OperationName(input_op) << "\n";
+    std::cout << "Output Op Name: " << TF_OperationName(boxes_op) << "\n";
+    std::cout << "Output Op Name: " << TF_OperationName(scores_op) << "\n";
+    std::cout << "Output Op Name: " << TF_OperationName(classes_op) << "\n";
+    std::cout << "Output Op Name: " << TF_OperationName(num_detections_op) << "\n";
+  }
+}
+
+void ObjectDetection::preprocessing(IplImage* src, IplImage* dst) {
+  cvCvtColor(src, dst, CV_BGR2RGB);
+}
+
+OD_Result ObjectDetection::sess_run(IplImage* img) {
+  // Create input variable
+  int img_width = img->width;
+  int img_height = img->height;
+  int img_channel = img->nChannels;  
+  const std::vector<std::int64_t> input_dims = {1, img_height, img_width, img_channel};
+  int image_size_by_dims = img_height*img_width*img_channel;
+  int image_tensor_size = std::min(image_size_by_dims, img->imageSize);
+  if (this->verbose) {
+    std::cout<<"image_tensor_size: "<<image_tensor_size<<std::endl;
+  }
+  TF_Tensor* input_value = CreateTensor(TF_UINT8,
+                                        input_dims.data(), input_dims.size(),
+                                        img->imageData, image_tensor_size);
+  TF_Tensor* input_values[1] = {input_value};
+  // Create output variable
+  const std::vector<std::int64_t> box_dims = {1, this->max_detections, 4};
+  const std::vector<std::int64_t> scores_dims = {1, this->max_detections};
+  const std::vector<std::int64_t> classes_dims = {1, this->max_detections};
+  const std::vector<std::int64_t> num_detections_dims = {1, 1};
+  TF_Tensor* boxes_value = TF_AllocateTensor(TF_FLOAT, box_dims.data(), box_dims.size(), sizeof(float) * 4 * this->max_detections);
+  TF_Tensor* scores_value = TF_AllocateTensor(TF_FLOAT, scores_dims.data(), scores_dims.size(), sizeof(float) * this->max_detections);
+  TF_Tensor* classes_value = TF_AllocateTensor(TF_FLOAT, classes_dims.data(), classes_dims.size(), sizeof(float) * this->max_detections);
+  TF_Tensor* num_detections_value = TF_AllocateTensor(TF_FLOAT, num_detections_dims.data(), num_detections_dims.size(), sizeof(float));
+  TF_Tensor* output_values[4] = {boxes_value, scores_value, classes_value, num_detections_value};
+  if (this->verbose) {
+    std::cout << "Input op info: " << TF_OperationNumInputs(input_op) << "\n";
+    std::cout << "Input dims info: (" << TF_Dim(input_value, 0) <<", "<< TF_Dim(input_value, 1) <<", "\
+                                      << TF_Dim(input_value, 2) <<", "<< TF_Dim(input_value, 3) <<")"<< "\n";
+  }  
+  // Create session
+  TF_SessionRun(this->sess, nullptr,
+                this->input_ops.data(), input_values, this->input_ops.size(),
+                this->output_ops.data(), output_values, this->output_ops.size(),
+                nullptr, 0, nullptr, this->sess_status);
+  if(TF_GetCode(this->sess_status) != TF_OK) {
+    fprintf(stderr, "ERROR: Unable to run session %s", TF_Message(this->sess_status));
+    exit(1);
+  }
+  OD_Result od_result; 
+  od_result.boxes = (float*)TF_TensorData(output_values[0]);
+  od_result.scores = (float*)TF_TensorData(output_values[1]);
+  od_result.label_ids = (float*)TF_TensorData(output_values[2]);
+  od_result.num_detections = (float*)TF_TensorData(output_values[3]);
+  return od_result;
+}
+
+OD_Result ObjectDetection::run(const char* img_path) {
+  IplImage* img = cvLoadImage(img_path, CV_LOAD_IMAGE_COLOR);
+  if (!img)
+  {
+    std::cout<<"Image load failed: "<<img_path<<std::endl;
+    exit(1);
+  }
+  if (this->verbose) {
+    std::cout<<"First pixel: (";
+    // std::cout<<(uint8_t)img->imageData[0]<<", ";
+    // std::cout<<(uint8_t)img->imageData[1]<<", ";
+    // std::cout<<(uint8_t)img->imageData[2]<<")"<<std::endl;;
+    std::cout<<unsigned((uint8_t)img->imageData[0])<<", ";
+    std::cout<<unsigned((uint8_t)img->imageData[1])<<", ";
+    std::cout<<unsigned((uint8_t)img->imageData[2])<<")"<<std::endl;;
+    std::cout<<"img size: "<<img->width<<", "<<img->height<<", "<<img->nChannels<<std::endl;
+    std::cout<<"img->depth: "<<img->depth<<std::endl;
+    std::cout<<"img->imgSize: "<<img->imageSize<<std::endl;
+    std::cout<<"img->width: "<<img->width<<std::endl;
+    std::cout<<"img->height: "<<img->height<<std::endl;
+    std::cout<<"img->nCHannels: "<<img->nChannels<<std::endl;
+    std::cout<<"img->alphaChannel: "<<img->alphaChannel<<std::endl;
+    std::cout<<"img->channelSeq : "<<img->channelSeq <<std::endl;
+    std::cout<<"img->colorModel: "<<img->colorModel<<std::endl;
+    std::cout<<"img->dataOrder: "<<img->dataOrder<<std::endl;
+    std::cout<<"img->nSize: "<<img->nSize<<std::endl;
+    std::cout<<"img->widthStep: "<<img->widthStep<<std::endl;
+  }
+  this->preprocessing(img, img);
+  OD_Result od_result;
+  od_result = this->sess_run(img);
+  od_result = this->postprocessing(img, od_result);
+  return od_result;
+}
+
+OD_Result ObjectDetection::postprocessing(IplImage* img, OD_Result od_result) {
+  int img_width = img->width;
+  int img_height = img->height;
+  int img_channel = img->nChannels;  
+  int num_detections = (int)od_result.num_detections[0];
+  int box_cnt = 0; 
+  for (int i=0; i<num_detections; i++) {
+    if (od_result.scores[i] >= 0.5) {
+      int xmin = (int)(od_result.boxes[i*4+1] * img_width);
+      int ymin = (int)(od_result.boxes[i*4+0] * img_height);
+      int xmax = (int)(od_result.boxes[i*4+3] * img_width);
+      int ymax = (int)(od_result.boxes[i*4+2] * img_height);
+      if (this->visible) {
+        cvRectangle(img, cvPoint(xmin, ymin), cvPoint(xmax, ymax), CV_RGB(0, 255, 255));
+      }
+      std::cout<<"Box_"<<box_cnt<<"("<<od_result.scores[i]<<", "<<od_result.label_ids[i]<<"): ["<<xmin<<", "<<ymin<<", "<<xmax<<", "<<ymax<<"]"<<std::endl;
+      box_cnt++;
+    }
+  }
+  std::cout<<"Total box number: "<<box_cnt<<std::endl;
+  if (this->visible) {
+    cvShowImage("Drawing Graphics", img);
+    cvWaitKey(0);
+  }
+  return od_result;
+}
+
+TF_Buffer* ObjectDetection::read_file(std::string path) {
+  const char* file = path.c_str();
   FILE *f = fopen(file, "rb");
   fseek(f, 0, SEEK_END);
   long fsize = ftell(f);
@@ -199,25 +211,12 @@ TF_Buffer* read_file(const char* file) {
   return buf;
 }
 
-TF_Tensor* CreateTensor(TF_DataType data_type,
-                        const std::int64_t* dims, std::size_t num_dims,
-                        const void* data, std::size_t len) {
-  if (dims == nullptr || data == nullptr) {
-    return nullptr;
-  }
-
-  TF_Tensor* tensor = TF_AllocateTensor(data_type, dims, static_cast<int>(num_dims), len);
-  if (tensor == nullptr) {
-    return nullptr;
-  }
-
-  void* tensor_data = TF_TensorData(tensor);
-  if (tensor_data == nullptr) {
-    TF_DeleteTensor(tensor);
-    return nullptr;
-  }
-
-  std::memcpy(tensor_data, data, std::min(len, TF_TensorByteSize(tensor)));
-
-  return tensor;
+void ObjectDetection::close() {
+  TF_CloseSession(this->sess, this->sess_status);
+  TF_DeleteSession(this->sess, this->sess_status);
+  TF_DeleteSessionOptions(this->sess_opts);
+  TF_DeleteImportGraphDefOptions(this->graph_opts);
+  TF_DeleteGraph(this->graph);
+  TF_DeleteStatus(this->graph_status);
 }
+
