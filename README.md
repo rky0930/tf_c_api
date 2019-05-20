@@ -11,7 +11,7 @@
 
 ... No need bazel !
 
-### Docker Environment
+### (Optional) Docker Environment
 ```
 # For CPU only
 docker pull rky0930/tf_c_api:opencv
