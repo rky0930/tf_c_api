@@ -5,7 +5,7 @@
 - [Tensorflow C API](https://www.tensorflow.org/install/lang_c)
   - Version 1.13.1
 - OpenCV
-  - Version 3.4.0
+  - Version 3.4.2
 
 ### Docker Environment
 ```
