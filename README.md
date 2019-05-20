@@ -2,10 +2,12 @@
  - Only Inference not for training
  
 ### Library requirements
-- [Tensorflow C API](https://www.tensorflow.org/install/lang_c)
+- Tensorflow C API
   - Version 1.13.1
+  - [Install TensorFlow for C](https://www.tensorflow.org/install/lang_c)
 - OpenCV
   - Version 3.4.2
+  - [Install script]()
 
 ### Docker Environment
 ```
