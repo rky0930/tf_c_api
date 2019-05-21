@@ -12,12 +12,13 @@ TF_Tensor* CreateTensor(TF_DataType data_type,
   if (tensor == nullptr) {
     return nullptr;
   }
-  void* tensor_data = TF_TensorData(tensor);
-  if (tensor_data == nullptr) {
-    TF_DeleteTensor(tensor);
-    return nullptr;
-  }
-  memcpy(tensor_data, data, std::min(len, TF_TensorByteSize(tensor)));
+  // void* tensor_data = TF_TensorData(tensor);
+  // if (tensor_data == nullptr) {
+  //   TF_DeleteTensor(tensor);
+  //   return nullptr;
+  // }
+  // std::memcpy(tensor_data, data, std::min(len, TF_TensorByteSize(tensor)));
+  std::memcpy(TF_TensorData(tensor), data, std::min(len, TF_TensorByteSize(tensor)));
   return tensor;
 }
 
@@ -85,6 +86,7 @@ void ObjectDetection::preprocessing(IplImage* src, IplImage* dst) {
 }
 
 OD_Result ObjectDetection::sess_run(IplImage* img) {
+  ResetOutputValues();
   // Create input variable
   int img_width = img->width;
   int img_height = img->height;
@@ -98,7 +100,8 @@ OD_Result ObjectDetection::sess_run(IplImage* img) {
   TF_Tensor* input_value = CreateTensor(TF_UINT8,
                                         input_dims.data(), input_dims.size(),
                                         img->imageData, image_tensor_size);
-  TF_Tensor* input_values[1] = {input_value};
+  // TF_Tensor* input_values[1] = {input_value};
+  input_values.emplace_back(input_value);
   // Create output variable
   const std::vector<std::int64_t> box_dims = {1, this->max_detections, 4};
   const std::vector<std::int64_t> scores_dims = {1, this->max_detections};
@@ -108,26 +111,39 @@ OD_Result ObjectDetection::sess_run(IplImage* img) {
   TF_Tensor* scores_value = TF_AllocateTensor(TF_FLOAT, scores_dims.data(), scores_dims.size(), sizeof(float) * this->max_detections);
   TF_Tensor* classes_value = TF_AllocateTensor(TF_FLOAT, classes_dims.data(), classes_dims.size(), sizeof(float) * this->max_detections);
   TF_Tensor* num_detections_value = TF_AllocateTensor(TF_FLOAT, num_detections_dims.data(), num_detections_dims.size(), sizeof(float));
-  TF_Tensor* output_values[4] = {boxes_value, scores_value, classes_value, num_detections_value};
+  // TF_Tensor* output_values[4] = {boxes_value, scores_value, classes_value, num_detections_value};
+  output_values.emplace_back(boxes_value);
+  output_values.emplace_back(scores_value);
+  output_values.emplace_back(classes_value);
+  output_values.emplace_back(num_detections_value);
   if (this->verbose) {
     std::cout << "Input op info: " << TF_OperationNumInputs(input_op) << "\n";
     std::cout << "Input dims info: (" << TF_Dim(input_value, 0) <<", "<< TF_Dim(input_value, 1) <<", "\
                                       << TF_Dim(input_value, 2) <<", "<< TF_Dim(input_value, 3) <<")"<< "\n";
   }  
+  const TF_Output* inputs_ptr = input_ops.empty() ? nullptr : &input_ops[0];
+  TF_Tensor* const* input_values_ptr =
+      input_values.empty() ? nullptr : &input_values[0];
+  const TF_Output* outputs_ptr = output_ops.empty() ? nullptr : &output_ops[0];
+  TF_Tensor** output_values_ptr =
+      output_values.empty() ? nullptr : &output_values[0];
+      
   // Create session
   TF_SessionRun(this->sess, nullptr,
-                this->input_ops.data(), input_values, this->input_ops.size(),
-                this->output_ops.data(), output_values, this->output_ops.size(),
+                inputs_ptr, input_values_ptr, this->input_ops.size(),
+                outputs_ptr, output_values_ptr, this->output_ops.size(),
                 nullptr, 0, nullptr, this->sess_status);
-  if(TF_GetCode(this->sess_status) != TF_OK) {
-    fprintf(stderr, "ERROR: Unable to run session %s", TF_Message(this->sess_status));
-    exit(1);
-  }
+  
   OD_Result od_result; 
   od_result.boxes = (float*)TF_TensorData(output_values[0]);
   od_result.scores = (float*)TF_TensorData(output_values[1]);
   od_result.label_ids = (float*)TF_TensorData(output_values[2]);
   od_result.num_detections = (float*)TF_TensorData(output_values[3]);
+  TF_DeleteTensor(boxes_value);
+  TF_DeleteTensor(scores_value);
+  TF_DeleteTensor(classes_value);
+  TF_DeleteTensor(num_detections_value);
+  DeleteInputValues();
   return od_result;
 }
 
@@ -163,6 +179,7 @@ OD_Result ObjectDetection::run(const char* img_path) {
   OD_Result od_result;
   od_result = this->sess_run(img);
   od_result = this->postprocessing(img, od_result);
+  cvReleaseImage(&img);
   return od_result;
 }
 
@@ -209,6 +226,20 @@ TF_Buffer* ObjectDetection::read_file(std::string path) {
   buf->length = fsize;
   buf->data_deallocator = free_buffer;
   return buf;
+}
+
+void ObjectDetection::DeleteInputValues() {
+  for (size_t i = 0; i < input_values.size(); ++i) {
+    if (input_values[i] != nullptr) TF_DeleteTensor(input_values[i]);
+  }
+  input_values.clear();
+}
+
+void ObjectDetection::ResetOutputValues() {
+  for (size_t i = 0; i < output_values.size(); ++i) {
+    if (output_values[i] != nullptr) TF_DeleteTensor(output_values[i]);
+  }
+  output_values.clear();
 }
 
 void ObjectDetection::close() {

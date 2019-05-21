@@ -24,13 +24,15 @@ class ObjectDetection {
     TF_Operation* input_op;
     TF_Output input_opout;
     std::vector<TF_Output> input_ops;
+    std::vector<TF_Tensor*> input_values;
     TF_Operation* boxes_op;
     TF_Operation* scores_op;
     TF_Operation* classes_op;
     TF_Operation* num_detections_op;
     TF_Output boxes_opout, scores_opout, classes_opout, num_detections_opout;
     std::vector<TF_Output> output_ops;
-
+    std::vector<TF_Tensor*> output_values;
+    
     int verbose = 0;
     int visible = 0;
   public:
@@ -47,5 +49,7 @@ class ObjectDetection {
     OD_Result run(const char* img_path);
     OD_Result postprocessing(IplImage* src, OD_Result od_result);
     TF_Buffer* read_file(std::string path);
+    void DeleteInputValues();
+    void ResetOutputValues();
     void close();
 };
