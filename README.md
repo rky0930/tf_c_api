@@ -7,9 +7,11 @@
   - [Install TensorFlow for C](https://www.tensorflow.org/install/lang_c)
 - OpenCV
   - Version 3.4.2
-  - [Install script]()
+  - [Install script](scripts/opencv_install.sh)  
 
-### Docker Environment
+... No need bazel !
+
+### (Optional) Docker Environment
 ```
 # For CPU only
 docker pull rky0930/tf_c_api:opencv
