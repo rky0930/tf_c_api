@@ -30,3 +30,11 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
 make -j4
 #make -j $(nproc)
 make install
+
+# For virtualenv
+# sudo make install
+# sudo ldconfig
+# cd /usr/local/lib/python3.6/site-packages/
+# sudo mv cv2.cpython-36m-x86_64-linux-gnu.so cv2.so
+# cd ~/.virtualenvs/[virtualenv_name]/lib/python3.6/site-packages/
+# ln -s /usr/local/lib/python3.6/site-packages/cv2.so cv2.so
